@@ -1,0 +1,173 @@
+study(title="LZH- DeMark Time Indicator Strict Combo", shorttitle="LZH", overlay=true)
+//Pine Script version
+//@version=2
+//By Roger Pid and enhanced by GemsLove7
+//The logic contained herein is a modified version of the orginal work of Tom DeMark as specified in the following publication:
+//http://practicaltechnicalanalysis.blogspot.com.es/2013/01/tom-demark-sequential.html?m=1
+//The programming herein is based on the original Pine Script work of Jan WillemDe Korver found here: 
+//https://www.tradingview.com/script/caidMyY8-Tom-Demark-Count/
+//and enhanced by Roger Pid.
+//The source code for this program is free for distribution under the following guidelines and must not be hidden
+//https://creativecommons.org/licenses/by/4.0/
+//This version contains the traditional 13, combination 13, and aggressive 13 countdown indicators.
+//This is a modified version of the countdown where not all of the specified rules are implemented.
+//Note that the nesting (recycling) logic does not take into consideration the range of the 
+// completed setups as per documentation. This will lead to oddities when there are multiple back to back
+// setup completions. Use the inputs to minimize overlapping counts in fast moving markets.
+//Inputs (see Format->Inputs dialog)
+//Maximum candles between setup completions in order to consider second to be a nested (recycled) setup
+MAXSETUPTIME=input(title="Max time between setups for overlapping countdowns", type=integer, defval=30)
+//Maximum candles allowed to complete the countdown before it is cancelled.
+MAXCOUNTDNTIME=input(title="Max time to complete countdown", type=integer, defval=48)
+// aximum candles starting with the setup 9 candle +1 for a (B)uy or (S)ell to appear
+MAXSIGNALDELAY=input(title="Max time after a setup 9 candle for Buy/Sell signal (0-9)", type=integer, minval=0, maxval=9, defval=4)
+//If you get an error about max64 items exceeded it is because all the plots go 
+// into the Style dialog box including unused debug plots even if editable=false. Remove plots to < 64.
+DEBUG=false
+//Buy setup
+buySetup=close<close[4]?buySetup[1]==9 or nz(buySetup[1])==0?1:nz(buySetup[1])+1:0
+//Sell setup
+sellSetup=close>close[4]?sellSetup[1]==9 or nz(sellSetup[1])==0?1:nz(sellSetup[1])+1:0
+
+//Establish trendlines at the low/high of the setup
+buyTrend=buySetup==1?high:buySetup>1 and buySetup<=9?high>buyTrend[1]?high:buyTrend[1]:buyTrend[1]
+buyPlot=buySetup==9?buyTrend:buyPlot[1]
+
+sellTrend=sellSetup==1?low:sellSetup>1 and sellSetup<=9?low<sellTrend[1]?low:sellTrend[1]:sellTrend[1]
+sellPlot=sellSetup==9?sellTrend:sellPlot[1]
+
+//Buy signal
+isBuyPlotted=nz(buySetup)==9?false:buySignal[1]==true or isBuyPlotted[1]==true?true:nz(buySetup[MAXSIGNALDELAY+1])==9?true:false // init
+buySignal=nz(buySetup[MAXSIGNALDELAY])>9-MAXSIGNALDELAY and close>nz(high[1]) and nz(close[1])>nz(open[1]) and nz(close)>nz(open) and not isBuyPlotted
+//Sell signal
+isSellPlotted=nz(sellSetup)==9?false:sellSignal[1]==true or isSellPlotted[1]==true?true:nz(sellSetup[MAXSIGNALDELAY+1])==9?true:false // init
+sellSignal=nz(sellSetup[MAXSIGNALDELAY])>9-MAXSIGNALDELAY and close<nz(low[1]) and nz(close[1])<nz(open[1]) and nz(close)<nz(open) and not isSellPlotted
+
+//Buy countdown
+buyCntLimit=buySetup==9?1:buyCntLimit[1]>0?buyCntLimit[1]>MAXCOUNTDNTIME or sellSetup==9 or (buyCnt[1]==13 and nestedBuy[1]<=1)?0:nz(buyCntLimit[1])+1:0
+buyCnt=buyCntLimit>0 and close<=low[2]?buyCnt[1]==13?nestedBuy[1]>1?nestedBuy[1]:0:nz(buyCnt[1])+1:buyCntLimit>0?buyCnt[1]:0
+nestedBuy=buySetup==9?buyCnt[1]>0 and buyCnt[1]<13 and buySetupLimit[1]<MAXSETUPTIME?nestedBuy[1]<=1?14-nz(buyCnt[1]):nz(nestedBuy[1]):0:nz(nestedBuy[1])==0 or (buyCnt[1]==13 and buyCnt!=13)?0:nz(nestedBuy[1])
+buySetupLimit=buySetup==9?1:buySetupLimit[1]>0?nz(buySetupLimit[1])+1:0
+
+//Track the combo buy countdown indicator and price.
+//Full combo rules: counts 1-10 require close<=low[2], low<low[1], close<close[1],
+//and close below the prior combo close. Counts 11-13 require only successively lower closes.
+buyComboCntLimit=buySetup==9?1:buyComboCntLimit[1]>0?buyComboCntLimit[1]>MAXCOUNTDNTIME or sellSetup==9 or (buyComboCnt[1]==13 and nestedBuyCombo[1]<=1)?0:nz(buyComboCntLimit[1])+1:0
+buyComboActive=buyComboCntLimit>0 or (buyComboCntLimit==0 and buySetup>0 and buySetup<=9)
+buyComboPrevCnt=buyComboCnt[1]==13 and nestedBuyCombo[1]>1?nestedBuyCombo[1]-1:nz(buyComboCnt[1])
+buyComboStrict=close<=low[2] and low<low[1] and close<close[1] and (nz(buyComboClose[1])==0 or close<buyComboClose[1])
+buyComboFinal=nz(buyComboClose[1])==0 or close<buyComboClose[1]
+buyComboValid=buyComboActive and (buyComboPrevCnt>=10 and buyComboPrevCnt<13?buyComboFinal:buyComboStrict)
+buyComboClose=buyComboCntLimit==0 and sellSetup>0?0:buyComboValid?close:nz(buyComboClose[1])
+buyComboCnt=buyComboValid?buyComboCnt[1]==13?nestedBuyCombo[1]>1?nestedBuyCombo[1]:1:nz(buyComboCnt[1])+1:buyComboCntLimit==0 and sellSetup>0?0:nz(buyComboCnt[1])
+nestedBuyCombo=buySetup==9 and buyComboCntLimit>1?buyComboCnt[1]>0 and buyComboCnt[1]<13 and buySetupLimit[1]<MAXSETUPTIME?nestedBuyCombo[1]<=1?14-nz(buyComboCnt[1]):nz(nestedBuyCombo[1]):0:nz(nestedBuyCombo[1])==0 or sellSetup==9 or (buyComboCnt[1]==13 and buyComboCnt!=13)?0:nz(nestedBuyCombo[1])
+
+//Aggressive buy countdown, compare low<=low[2] starting with the 9 candle
+buyAggCntLimit=buySetup==9?1:buyAggCntLimit[1]>0?buyAggCntLimit[1]>MAXCOUNTDNTIME or sellSetup==9 or (buyAggCnt[1]==13 and nestedBuyAgg[1]<=1)?0:nz(buyAggCntLimit[1])+1:0
+buyAggCnt=buyAggCntLimit>0 and low<=low[2]?buyAggCnt[1]==13?nestedBuyAgg[1]>1?nestedBuyAgg[1]:0:nz(buyAggCnt[1])+1:buyAggCntLimit>0?buyAggCnt[1]:0
+nestedBuyAgg=buySetup==9?buyAggCnt[1]>0 and buyAggCnt[1]<13 and buySetupLimit[1]<MAXSETUPTIME?nestedBuyAgg[1]<=1?14-nz(buyAggCnt[1]):nz(nestedBuyAgg[1]):0:nz(nestedBuyAgg[1])==0 or (buyAggCnt[1]==13 and buyAggCnt!=13)?0:nz(nestedBuyAgg[1])
+
+//Sell countdown
+sellCntLimit=sellSetup==9?1:sellCntLimit[1]>0?sellCntLimit[1]>MAXCOUNTDNTIME or buySetup==9 or (sellCnt[1]==13 and nestedSell[1]<=1)?0:nz(sellCntLimit[1])+1:0
+sellCnt=sellCntLimit>0 and close>=high[2]?sellCnt[1]==13?nestedSell[1]>1?nestedSell[1]:0:nz(sellCnt[1])+1:sellCntLimit>0?sellCnt[1]:0
+nestedSell=sellSetup==9?sellCnt[1]>0 and sellCnt[1]<13 and sellSetupLimit[1]<MAXSETUPTIME?nestedSell[1]<=1?14-nz(sellCnt[1]):nz(nestedSell[1]):0:nz(nestedSell[1])==0 or (sellCnt[1]==13 and sellCnt!=13)?0:nz(nestedSell[1])
+sellSetupLimit=sellSetup==9?1:sellSetupLimit[1]>0?nz(sellSetupLimit[1])+1:0
+
+//Track the combo sell countdown indicator and price.
+//Full combo rules: counts 1-10 require close>=high[2], high>high[1], close>close[1],
+//and close above the prior combo close. Counts 11-13 require only successively higher closes.
+sellComboCntLimit=sellSetup==9?1:sellComboCntLimit[1]>0?sellComboCntLimit[1]>MAXCOUNTDNTIME or buySetup==9 or (sellComboCnt[1]==13 and nestedSellCombo[1]<=1)?0:nz(sellComboCntLimit[1])+1:0
+sellComboActive=sellComboCntLimit>0 or (sellComboCntLimit==0 and sellSetup>0 and sellSetup<=9)
+sellComboPrevCnt=sellComboCnt[1]==13 and nestedSellCombo[1]>1?nestedSellCombo[1]-1:nz(sellComboCnt[1])
+sellComboStrict=close>=high[2] and high>high[1] and close>close[1] and (nz(sellComboClose[1])==0 or close>sellComboClose[1])
+sellComboFinal=nz(sellComboClose[1])==0 or close>sellComboClose[1]
+sellComboValid=sellComboActive and (sellComboPrevCnt>=10 and sellComboPrevCnt<13?sellComboFinal:sellComboStrict)
+sellComboClose=sellComboCntLimit==0 and buySetup>0?0:sellComboValid?close:nz(sellComboClose[1])
+sellComboCnt=sellComboValid?sellComboCnt[1]==13?nestedSellCombo[1]>1?nestedSellCombo[1]:1:nz(sellComboCnt[1])+1:sellComboCntLimit==0 and buySetup>0?0:nz(sellComboCnt[1])
+nestedSellCombo=sellSetup==9 and sellComboCntLimit>1?sellComboCnt[1]>0 and sellComboCnt[1]<13 and buySetupLimit[1]<MAXSETUPTIME?nestedSellCombo[1]<=1?14-nz(sellComboCnt[1]):nz(nestedSellCombo[1]):0:nz(nestedSellCombo[1])==0 or buySetup==9 or (sellComboCnt[1]==13 and sellComboCnt!=13)?0:nz(nestedSellCombo[1])
+
+//Aggressive sell countdown, compare high>=high[2] starting with the 9 candle
+sellAggCntLimit=sellSetup==9?1:sellAggCntLimit[1]>0?sellAggCntLimit[1]>MAXCOUNTDNTIME or buySetup==9 or (sellAggCnt[1]==13 and nestedSellAgg[1]<=1)?0:nz(sellAggCntLimit[1])+1:0
+sellAggCnt=sellAggCntLimit>0 and high>=high[2]?sellAggCnt[1]==13?nestedSellAgg[1]>1?nestedSellAgg[1]:0:nz(sellAggCnt[1])+1:sellAggCntLimit>0?sellAggCnt[1]:0
+nestedSellAgg=sellSetup==9?sellAggCnt[1]>0 and sellAggCnt[1]<13 and sellSetupLimit[1]<MAXSETUPTIME?nestedSellAgg[1]<=1?14-nz(sellAggCnt[1]):nz(nestedSellAgg[1]):0:nz(nestedSellAgg[1])==0 or (sellAggCnt[1]==13 and sellAggCnt!=13)?0:nz(nestedSellAgg[1])
+
+//Debug
+//plotchar(validBuyCombo and DEBUG, text='T', color=orange, location=location.top)
+//plotchar(buyComboPrice[1]>0 and DEBUG, text='T', color=blue, location=location.bottom)
+//plotchar(buyComboPrice!=buyComboPrice[1] and DEBUG, text='T', color=blue, location=location.bottom)
+//plotchar(sellCntLimit[1]>MAXCOUNTDNTIME and DEBUG, text='X', color=orange, location=location.top)
+//plotchar(nz(buyComboCnt)>0 and DEBUG, editable=false, text='X', color=blue, location=location.top)
+//plotchar(buyComboCnt==0 and DEBUG, editable=false, text='0', color=blue, location=location.top)
+
+//Plot support/resistance trend lines
+plotchar(buyPlot>high?buyPlot:close, char='-', title='Resistance Line', size=size.tiny, location=location.absolute, color=buyPlot>high?color(red,0):color(red,100))
+plotchar(sellPlot<low?sellPlot:close, char='-', title='Support Line', size=size.tiny, location=location.absolute, color=sellPlot<low?color(green,0):color(green,100))
+
+//Plot Buy/Sell indicators
+plotchar(buySignal,char='B',color=green,location=location.belowbar)
+plotchar(sellSignal,char='S',color=red,location=location.belowbar)
+//Plot buy setup
+plotchar(buySetup==1, title='Buy Setup 1', char='1', color=red)
+plotchar(buySetup==2, title='Buy Setup 2', char='2', color=red)
+plotchar(buySetup==3, title='Buy Setup 3', char='3', color=red)
+plotchar(buySetup==4, title='Buy Setup 4', char='4', color=red)
+plotchar(buySetup==5, title='Buy Setup 5', char='5', color=red)
+plotchar(buySetup==6, title='Buy Setup 6', char='6', color=red)
+plotchar(buySetup==7, title='Buy Setup 7', char='7', color=red)
+plotchar(buySetup==8, title='Buy Setup 8', char='8', color=red)
+plotshape(buySetup==9,  title='Buy Setup 9', text='9', textcolor=red, style=shape.arrowup, color=green)
+
+//Plot sell setup
+plotchar(sellSetup==1, title='Sell Setup 1', char='1', color=green)
+plotchar(sellSetup==2, title='Sell Setup 2', char='2', color=green)
+plotchar(sellSetup==3, title='Sell Setup 3', char='3', color=green)
+plotchar(sellSetup==4, title='Sell Setup 4', char='4', color=green)
+plotchar(sellSetup==5, title='Sell Setup 5', char='5', color=green)
+plotchar(sellSetup==6, title='Sell Setup 6', char='6', color=green)
+plotchar(sellSetup==7, title='Sell Setup 7', char='7', color=green)
+plotchar(sellSetup==8, title='Sell Setup 8', char='8', color=green)
+plotshape(sellSetup==9, title='Sell Setup 9', text='9', textcolor=green, style=shape.arrowdown, color=red)
+
+//Plot buy countdown
+plotchar(buyCnt==1 and buyCnt[1]!=1?true:false, title='Buy Countdown 1', char='', text='1', location=location.belowbar, color=red)
+plotchar(buyCnt==2 and buyCnt[1]!=2?true:false, title='Buy Countdown 2', char='', text='2', location=location.belowbar, color=red)
+plotchar(buyCnt==3 and buyCnt[1]!=3?true:false, title='Buy Countdown 3', char='', text='3', location=location.belowbar, color=red)
+plotchar(buyCnt==4 and buyCnt[1]!=4?true:false, title='Buy Countdown 4', char='', text='4', location=location.belowbar, color=red)
+plotchar(buyCnt==5 and buyCnt[1]!=5?true:false, title='Buy Countdown 5', char='', text='5', location=location.belowbar, color=red)
+plotchar(buyCnt==6 and buyCnt[1]!=6?true:false, title='Buy Countdown 6', char='', text='6', location=location.belowbar, color=red)
+plotchar(buyCnt==7 and buyCnt[1]!=7?true:false, title='Buy Countdown 7', char='', text='7', location=location.belowbar, color=red)
+plotchar(buyCnt==8 and buyCnt[1]!=8?true:false, title='Buy Countdown 8', char='', text='8', location=location.belowbar, color=red)
+plotchar(buyCnt==9 and buyCnt[1]!=9?true:false, title='Buy Countdown 9', char='', text='9', location=location.belowbar, color=red)
+plotchar(buyCnt==10 and buyCnt[1]!=10?true:false, title='Buy Countdown 10', char='', text='10', location=location.belowbar, color=red)
+plotchar(buyCnt==11 and buyCnt[1]!=11?true:false, title='Buy Countdown 11', char='', text='11', location=location.belowbar, color=red)
+plotchar(buyCnt==12 and buyCnt[1]!=12?true:false, title='Buy Countdown 12', char='', text='12', location=location.belowbar, color=red)
+plotshape(buyCnt==13 and buyCnt[1]!=13?true:false, title='Buy Countdown 13', text='\n13', textcolor=red, location=location.belowbar, style=shape.arrowup, color=green)
+//Plot combo buy countdown when == 13
+//Avoid the A13 and C13 plotting on top each other
+plotshape(buyComboCnt==10 and buyComboCnt[1]!=10?true:false, title='Combo Buy Countdown 10', text='C10', textcolor=black, location=location.belowbar, style=shape.arrowup, color=green)
+plotshape(buyComboCnt==13 and buyComboCnt[1]!=13 and buyAggCnt==13 and buyAggCnt[1]!=13?true:false, title='Combo Buy Countdown 13', text='\n\nC13', textcolor=black, location=location.belowbar, style=shape.arrowup, color=green)
+plotshape(buyComboCnt==13 and buyComboCnt[1]!=13 and not(buyAggCnt==13 and buyAggCnt[1]!=13)?true:false, title='Combo Buy Countdown 13', text='C13', textcolor=black, location=location.belowbar, style=shape.arrowup, color=green)
+//Plot aggressive buy countdown when == 13
+plotshape(buyAggCnt==13 and buyAggCnt[1]!=13?true:false, text='A13', title='Aggressive 13 Buy', textcolor=black, location=location.belowbar, style=shape.arrowup, color=green)
+
+//Plot sell countdown
+plotchar(sellCnt==1 and sellCnt[1]!=1?true:false, title='Sell Countdown 1', char='', text='1', location=location.belowbar, color=green)
+plotchar(sellCnt==2 and sellCnt[1]!=2?true:false, title='Sell Countdown 2', char='', text='2', location=location.belowbar, color=green)
+plotchar(sellCnt==3 and sellCnt[1]!=3?true:false, title='Sell Countdown 3', char='', text='3', location=location.belowbar, color=green)
+plotchar(sellCnt==4 and sellCnt[1]!=4?true:false, title='Sell Countdown 4', char='', text='4', location=location.belowbar, color=green)
+plotchar(sellCnt==5 and sellCnt[1]!=5?true:false, title='Sell Countdown 5', char='', text='5', location=location.belowbar, color=green)
+plotchar(sellCnt==6 and sellCnt[1]!=6?true:false, title='Sell Countdown 6', char='', text='6', location=location.belowbar, color=green)
+plotchar(sellCnt==7 and sellCnt[1]!=7?true:false, title='Sell Countdown 7', char='', text='7', location=location.belowbar, color=green)
+plotchar(sellCnt==8 and sellCnt[1]!=8?true:false, title='Sell Countdown 8', char='', text='8', location=location.belowbar, color=green)
+plotchar(sellCnt==9 and sellCnt[1]!=9?true:false, title='Sell Countdown 9', char='', text='9', location=location.belowbar, color=green)
+plotchar(sellCnt==10 and sellCnt[1]!=10?true:false, title='Sell Countdown 10', char='', text='10', location=location.belowbar, color=green)
+plotchar(sellCnt==11 and sellCnt[1]!=11?true:false, title='Sell Countdown 11', char='', text='11', location=location.belowbar, color=green)
+plotchar(sellCnt==12 and sellCnt[1]!=12?true:false, title='Sell Countdown 12', char='', text='12', location=location.belowbar, color=green)
+plotshape(sellCnt==13 and sellCnt[1]!=13?true:false, title='Sell Countdown 13', text='\n13', textcolor=green, location=location.belowbar, style=shape.arrowdown, color=red)
+//Plot combo sell countdown when == 13
+//Avoid the A13 and C13 plotting on top each other
+plotshape(sellComboCnt==10 and sellComboCnt[1]!=10?true:false, title='Combo Sell Countdown 10', text='C10', textcolor=black, location=location.belowbar, style=shape.arrowdown, color=red)
+plotshape(sellComboCnt==13 and sellComboCnt[1]!=13 and sellAggCnt==13 and sellAggCnt[1]!=13?true:false, title='Combo Sell Countdown 13', text='\n\nC13', textcolor=black, location=location.belowbar, style=shape.arrowdown, color=red)
+plotshape(sellComboCnt==13 and sellComboCnt[1]!=13 and not(sellAggCnt==13 and sellAggCnt[1]!=13)?true:false, title='Combo Sell Countdown 13', text='C13', textcolor=black, location=location.belowbar, style=shape.arrowdown, color=red)
+//Plot aggressive sell countdown when == 13
+plotshape(sellAggCnt==13 and sellAggCnt[1]!=13?true:false, text='A13', title='Aggressive 13 Sell', textcolor=black, location=location.belowbar, style=shape.arrowdown, color=red)
