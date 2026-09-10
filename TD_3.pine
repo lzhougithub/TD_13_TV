@@ -206,7 +206,8 @@ drawCombo(ComboSequence seq, int stack, array<label> markers) =>
     // Separate labels preserve multiple same-bar events and their own tooltips.
     float markerY = low - markerGap * (stack + 2)
     string markerStyle = seq.count == 10 ? label.style_none : seq.direction == 1 ? label.style_arrowdown : label.style_arrowup
-    label mark = label.new(bar_index, markerY, caption, xloc=xloc.bar_index, yloc=yloc.price, style=markerStyle, color=seq.direction == 1 ? color.red : color.green, textcolor=color.black, size=size.small, tooltip=sequenceText(seq))
+    string markerSize = seq.count == 13 and seq.direction == 1 ? size.tiny : size.small
+    label mark = label.new(bar_index, markerY, caption, xloc=xloc.bar_index, yloc=yloc.price, style=markerStyle, color=seq.direction == 1 ? color.red : color.green, textcolor=color.black, size=markerSize, tooltip=sequenceText(seq))
     markers.push(mark)
     if markers.size() > 450
         label.delete(markers.shift())
