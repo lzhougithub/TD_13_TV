@@ -1,0 +1,362 @@
+//@version=6
+indicator(title="LZH_3- DeMark Time Indicator Independent Combo", shorttitle="LZH3", overlay=true, max_labels_count=500)
+
+// TD_3: independent strict Combo sequences, derived from TD_2.pine.
+// Original authors: Jan Willem De Korver, Roger Pid, and GemsLove7.
+// Original references and attribution:
+// http://practicaltechnicalanalysis.blogspot.com.es/2013/01/tom-demark-sequential.html?m=1
+// https://www.tradingview.com/script/caidMyY8-Tom-Demark-Count/
+// Free distribution with attribution: https://creativecommons.org/licenses/by/4.0/
+//
+// Combo policy:
+// - A provisional sequence starts at setup 1; a failed setup discards it.
+// - Setup 9 confirms that sequence, including qualifying bars from setup 1.
+// - Same-direction setup-9 gaps strictly below MAXSETUPTIME allow overlap.
+//   At or beyond that gap, the new setup supersedes older same-side Combos.
+// - Each confirmed Combo expires AFTER setup9 bar_index + MAXCOUNTDNTIME.
+//   An opposite setup 9 cancels it. New setups never renew its deadline.
+// - Each sequence has its own count and last qualifying close.
+// - C1-C10 use the four strict conditions; C11-C13 only compare Combo closes.
+// This retains the project's custom rules, not complete DeMark range recycling.
+// Ordinary var state rolls back on live ticks; intrabar counts remain provisional.
+
+int MAXSETUPTIME = input.int(30, "Max time between setups for overlapping countdowns", minval=0, maxval=5000, tooltip="Same-direction setup-9 gaps below this number of chart bars allow overlapping Combos. At or above it, the newer setup replaces older same-side Combos. 0 disables Combo overlap. Also used by the legacy Sequential/aggressive counters.")
+int MAXCOUNTDNTIME = input.int(48, "Max time to complete countdown", minval=1, maxval=5000, tooltip="A Combo can qualify through setup-9 bar + this many chart bars. It expires on the following bar. Each Combo has its own deadline.")
+int MAXSIGNALDELAY = input.int(4, "Max time after a setup 9 candle for Buy/Sell signal (0-9)", minval=0, maxval=9)
+bool SHOWAUDIT = input.bool(false, "Show Combo audit", group="Combo audit")
+string AUDITSIDE = input.string("Sell", "Direction", options=["Buy", "Sell"], group="Combo audit")
+string AUDITDATE = input.string("", "Setup 9 date (YYYY-MM-DD)", group="Combo audit", tooltip="Example: 2026-08-20. Uses the symbol's exchange timezone. Blank selects the latest completed setup for the chosen direction. The most recent 100 retired sequences are retained.")
+bool LOGAUDIT = input.bool(false, "Write selected setup audit to Pine Logs", group="Combo audit", tooltip="Logs the selected sequence on the last historical bar and each live update. Set an explicit setup date to inspect an older sequence.")
+bool SHOWORIGIN = input.bool(false, "Include setup date on Combo markers", group="Combo audit")
+
+// Explicit declarations replace Pine v2 self-referencing declarations.
+// Non-Combo equations below retain TD_2's ordering and historical references.
+var int buySetup = na
+var int sellSetup = na
+var float buyTrend = na
+var float buyPlot = na
+var float sellTrend = na
+var float sellPlot = na
+var bool isBuyPlotted = false
+var bool buySignal = false
+var bool isSellPlotted = false
+var bool sellSignal = false
+var int buyCntLimit = na
+var int buyCnt = na
+var int nestedBuy = na
+var int buySetupLimit = na
+var int buyAggCntLimit = na
+var int buyAggCnt = na
+var int nestedBuyAgg = na
+var int sellCntLimit = na
+var int sellCnt = na
+var int nestedSell = na
+var int sellSetupLimit = na
+var int sellAggCntLimit = na
+var int sellAggCnt = na
+var int nestedSellAgg = na
+
+//Buy setup
+buySetup := close<close[4]?buySetup[1]==9 or nz(buySetup[1])==0?1:nz(buySetup[1])+1:0
+//Sell setup
+sellSetup := close>close[4]?sellSetup[1]==9 or nz(sellSetup[1])==0?1:nz(sellSetup[1])+1:0
+
+//Establish trendlines at the low/high of the setup
+buyTrend := buySetup==1?high:buySetup>1 and buySetup<=9?high>buyTrend[1]?high:buyTrend[1]:buyTrend[1]
+buyPlot := buySetup==9?buyTrend:buyPlot[1]
+
+sellTrend := sellSetup==1?low:sellSetup>1 and sellSetup<=9?low<sellTrend[1]?low:sellTrend[1]:sellTrend[1]
+sellPlot := sellSetup==9?sellTrend:sellPlot[1]
+
+//Buy signal
+isBuyPlotted := nz(buySetup)==9?false:buySignal[1]==true or isBuyPlotted[1]==true?true:nz(buySetup[MAXSIGNALDELAY+1])==9?true:false // init
+buySignal := nz(buySetup[MAXSIGNALDELAY])>9-MAXSIGNALDELAY and close>nz(high[1]) and nz(close[1])>nz(open[1]) and nz(close)>nz(open) and not isBuyPlotted
+//Sell signal
+isSellPlotted := nz(sellSetup)==9?false:sellSignal[1]==true or isSellPlotted[1]==true?true:nz(sellSetup[MAXSIGNALDELAY+1])==9?true:false // init
+sellSignal := nz(sellSetup[MAXSIGNALDELAY])>9-MAXSIGNALDELAY and close<nz(low[1]) and nz(close[1])<nz(open[1]) and nz(close)<nz(open) and not isSellPlotted
+
+//Buy countdown
+buyCntLimit := buySetup==9?1:buyCntLimit[1]>0?buyCntLimit[1]>MAXCOUNTDNTIME or sellSetup==9 or (buyCnt[1]==13 and nestedBuy[1]<=1)?0:nz(buyCntLimit[1])+1:0
+buyCnt := buyCntLimit>0 and close<=low[2]?buyCnt[1]==13?nestedBuy[1]>1?nestedBuy[1]:0:nz(buyCnt[1])+1:buyCntLimit>0?buyCnt[1]:0
+nestedBuy := buySetup==9?buyCnt[1]>0 and buyCnt[1]<13 and buySetupLimit[1]<MAXSETUPTIME?nestedBuy[1]<=1?14-nz(buyCnt[1]):nz(nestedBuy[1]):0:nz(nestedBuy[1])==0 or (buyCnt[1]==13 and buyCnt!=13)?0:nz(nestedBuy[1])
+buySetupLimit := buySetup==9?1:buySetupLimit[1]>0?nz(buySetupLimit[1])+1:0
+
+//Aggressive buy countdown, compare low<=low[2] starting with the 9 candle
+buyAggCntLimit := buySetup==9?1:buyAggCntLimit[1]>0?buyAggCntLimit[1]>MAXCOUNTDNTIME or sellSetup==9 or (buyAggCnt[1]==13 and nestedBuyAgg[1]<=1)?0:nz(buyAggCntLimit[1])+1:0
+buyAggCnt := buyAggCntLimit>0 and low<=low[2]?buyAggCnt[1]==13?nestedBuyAgg[1]>1?nestedBuyAgg[1]:0:nz(buyAggCnt[1])+1:buyAggCntLimit>0?buyAggCnt[1]:0
+nestedBuyAgg := buySetup==9?buyAggCnt[1]>0 and buyAggCnt[1]<13 and buySetupLimit[1]<MAXSETUPTIME?nestedBuyAgg[1]<=1?14-nz(buyAggCnt[1]):nz(nestedBuyAgg[1]):0:nz(nestedBuyAgg[1])==0 or (buyAggCnt[1]==13 and buyAggCnt!=13)?0:nz(nestedBuyAgg[1])
+
+//Sell countdown
+sellCntLimit := sellSetup==9?1:sellCntLimit[1]>0?sellCntLimit[1]>MAXCOUNTDNTIME or buySetup==9 or (sellCnt[1]==13 and nestedSell[1]<=1)?0:nz(sellCntLimit[1])+1:0
+sellCnt := sellCntLimit>0 and close>=high[2]?sellCnt[1]==13?nestedSell[1]>1?nestedSell[1]:0:nz(sellCnt[1])+1:sellCntLimit>0?sellCnt[1]:0
+nestedSell := sellSetup==9?sellCnt[1]>0 and sellCnt[1]<13 and sellSetupLimit[1]<MAXSETUPTIME?nestedSell[1]<=1?14-nz(sellCnt[1]):nz(nestedSell[1]):0:nz(nestedSell[1])==0 or (sellCnt[1]==13 and sellCnt!=13)?0:nz(nestedSell[1])
+sellSetupLimit := sellSetup==9?1:sellSetupLimit[1]>0?nz(sellSetupLimit[1])+1:0
+
+//Aggressive sell countdown, compare high>=high[2] starting with the 9 candle
+sellAggCntLimit := sellSetup==9?1:sellAggCntLimit[1]>0?sellAggCntLimit[1]>MAXCOUNTDNTIME or buySetup==9 or (sellAggCnt[1]==13 and nestedSellAgg[1]<=1)?0:nz(sellAggCntLimit[1])+1:0
+sellAggCnt := sellAggCntLimit>0 and high>=high[2]?sellAggCnt[1]==13?nestedSellAgg[1]>1?nestedSellAgg[1]:0:nz(sellAggCnt[1])+1:sellAggCntLimit>0?sellAggCnt[1]:0
+nestedSellAgg := sellSetup==9?sellAggCnt[1]>0 and sellAggCnt[1]<13 and sellSetupLimit[1]<MAXSETUPTIME?nestedSellAgg[1]<=1?14-nz(sellAggCnt[1]):nz(nestedSellAgg[1]):0:nz(nestedSellAgg[1])==0 or (sellAggCnt[1]==13 and sellAggCnt!=13)?0:nz(nestedSellAgg[1])
+
+
+// Independent Combo state. Direction: -1 = buy, +1 = sell.
+type ComboSequence
+    int direction
+    int startBar
+    int startTime
+    int setupBar = na
+    int setupTime = na
+    int count = 0
+    float lastClose = na
+    string trail = ""
+    string state = "Pending setup"
+    int endTime = na
+
+// Explicit bar inputs let the production engine run against deterministic fixtures.
+type ComboBar
+    int index
+    int stamp
+    float highPrice
+    float lowPrice
+    float closePrice
+    float previousHigh
+    float previousLow
+    float previousClose
+    float highTwoBack
+    float lowTwoBack
+
+dateText(int stamp) =>
+    na(stamp) ? "pending" : str.format_time(stamp, "yyyy-MM-dd", syminfo.timezone)
+
+sequenceText(ComboSequence seq) =>
+    string side = seq.direction == 1 ? "Sell" : "Buy"
+    side + " Combo | setup 1: " + dateText(seq.startTime) + " | setup 9: " + dateText(seq.setupTime) + "\n" + seq.state + " | C" + str.tostring(seq.count) + "\n" + seq.trail
+
+retireSequence(array<ComboSequence> records, ComboSequence seq, string reason, int stamp) =>
+    seq.state := reason
+    seq.endTime := stamp
+    // Failed provisional setups are discarded, not recorded as confirmed Combos.
+    if not na(seq.setupBar)
+        records.push(seq)
+        if records.size() > 100
+            records.shift()
+    true
+
+updateCombos(array<ComboSequence> sequences, array<ComboSequence> records, int direction, int setup, int oppositeSetup, int previousSetup9, ComboBar bar, int overlapWindow, int duration) =>
+    // Creating the candidate now captures qualifying bars BEFORE setup completion.
+    if setup == 1
+        sequences.push(ComboSequence.new(direction, bar.index, bar.stamp))
+    bool replaceOlder = setup == 9 and not na(previousSetup9) and bar.index - previousSetup9 >= overlapWindow
+    array<ComboSequence> milestones = array.new<ComboSequence>()
+    int i = 0
+    while i < sequences.size()
+        ComboSequence seq = sequences.get(i)
+        bool confirmed = not na(seq.setupBar)
+        bool discard = false
+        string reason = ""
+        // Cancellation and expiry are evaluated before this bar can qualify.
+        if oppositeSetup == 9
+            discard := true
+            reason := "Cancelled by opposite setup 9"
+        else if confirmed and bar.index > seq.setupBar + duration
+            discard := true
+            reason := "Expired"
+        else if confirmed and replaceOlder
+            discard := true
+            reason := "Replaced outside overlap window"
+        else if not confirmed
+            // A setup must remain consecutive all the way from 1 to 9.
+            if setup == 0 or bar.index - seq.startBar != setup - 1
+                discard := true
+                reason := "Setup failed"
+            else if setup == 9
+                seq.setupBar := bar.index
+                seq.setupTime := bar.stamp
+                seq.state := "Active"
+        if not discard
+            bool improves = na(seq.lastClose) or (direction == 1 ? bar.closePrice > seq.lastClose : bar.closePrice < seq.lastClose)
+            bool strictBar = direction == 1 ? bar.closePrice >= bar.highTwoBack and bar.highPrice > bar.previousHigh and bar.closePrice > bar.previousClose : bar.closePrice <= bar.lowTwoBack and bar.lowPrice < bar.previousLow and bar.closePrice < bar.previousClose
+            bool qualifies = seq.count < 13 and improves and (seq.count >= 10 or strictBar)
+            if qualifies
+                seq.count += 1
+                seq.lastClose := bar.closePrice
+                seq.trail += (seq.count == 1 ? "" : "\n") + "C" + str.tostring(seq.count) + "  " + dateText(bar.stamp) + "  " + str.tostring(bar.closePrice, format.mintick)
+                if seq.count == 13
+                    seq.state := "Completed"
+                if seq.count == 10 or seq.count == 13
+                    // Snapshot C10 before this same sequence advances on future bars.
+                    milestones.push(seq.copy())
+                if seq.count == 13
+                    discard := true
+                    reason := "Completed"
+        if discard
+            retireSequence(records, seq, reason, bar.stamp)
+            sequences.remove(i)
+        else
+            i += 1
+    milestones
+
+// True range is evaluated globally on every bar, outside any lazy expression.
+float markerAtr = ta.atr(14)
+float markerGap = math.max(nz(markerAtr, high - low) * 0.3, syminfo.mintick * 8)
+
+drawCombo(ComboSequence seq, int stack, array<label> markers) =>
+    string caption = "C" + str.tostring(seq.count)
+    if SHOWORIGIN
+        caption += "\n" + dateText(seq.setupTime)
+    // Separate labels preserve multiple same-bar events and their own tooltips.
+    float markerY = low - markerGap * (stack + 2)
+    string markerStyle = seq.count == 10 ? label.style_none : seq.direction == 1 ? label.style_arrowdown : label.style_arrowup
+    label mark = label.new(bar_index, markerY, caption, xloc=xloc.bar_index, yloc=yloc.price, style=markerStyle, color=seq.direction == 1 ? color.red : color.green, textcolor=color.black, size=size.small, tooltip=sequenceText(seq))
+    markers.push(mark)
+    if markers.size() > 450
+        label.delete(markers.shift())
+    true
+
+var array<ComboSequence> buyCombos = array.new<ComboSequence>()
+var array<ComboSequence> sellCombos = array.new<ComboSequence>()
+var array<ComboSequence> retiredCombos = array.new<ComboSequence>()
+var array<label> comboMarkers = array.new<label>()
+var int lastBuySetup9 = na
+var int lastSellSetup9 = na
+
+ComboBar currentBar = ComboBar.new(bar_index, time, high, low, close, high[1], low[1], close[1], high[2], low[2])
+array<ComboSequence> buyMilestones = updateCombos(buyCombos, retiredCombos, -1, buySetup, sellSetup, lastBuySetup9, currentBar, MAXSETUPTIME, MAXCOUNTDNTIME)
+array<ComboSequence> sellMilestones = updateCombos(sellCombos, retiredCombos, 1, sellSetup, buySetup, lastSellSetup9, currentBar, MAXSETUPTIME, MAXCOUNTDNTIME)
+int buyCombo10Events = 0
+int buyCombo13Events = 0
+int sellCombo10Events = 0
+int sellCombo13Events = 0
+int markerStack = 0
+for seq in buyMilestones
+    drawCombo(seq, markerStack, comboMarkers)
+    markerStack += 1
+    buyCombo10Events += seq.count == 10 ? 1 : 0
+    buyCombo13Events += seq.count == 13 ? 1 : 0
+for seq in sellMilestones
+    drawCombo(seq, markerStack, comboMarkers)
+    markerStack += 1
+    sellCombo10Events += seq.count == 10 ? 1 : 0
+    sellCombo13Events += seq.count == 13 ? 1 : 0
+// Update these only AFTER both engines have read the prior completion dates.
+if buySetup == 9
+    lastBuySetup9 := bar_index
+if sellSetup == 9
+    lastSellSetup9 := bar_index
+
+// Audit is optional; marker tooltips always retain the originating setup and trail.
+selectAudit(array<ComboSequence> sequences, ComboSequence selected, int direction, string requestedDate) =>
+    ComboSequence result = selected
+    for seq in sequences
+        if seq.direction == direction and not na(seq.setupTime)
+            bool matches = requestedDate == "" or dateText(seq.setupTime) == requestedDate
+            if matches and (na(result) or seq.setupBar > result.setupBar)
+                result := seq
+    result
+
+activeSummary(array<ComboSequence> sequences) =>
+    string result = ""
+    for seq in sequences
+        string side = seq.direction == 1 ? "Sell" : "Buy"
+        result += (result == "" ? "" : "\n") + side + " " + dateText(seq.setupTime) + ": C" + str.tostring(seq.count)
+    result
+
+var table audit = table.new(position.top_right, 2, 6, bgcolor=color.new(color.white, 5), frame_color=color.gray, frame_width=1)
+if barstate.islast or (LOGAUDIT and barstate.islastconfirmedhistory)
+    int auditDirection = AUDITSIDE == "Sell" ? 1 : -1
+    ComboSequence selected = na
+    selected := selectAudit(retiredCombos, selected, auditDirection, AUDITDATE)
+    selected := selectAudit(buyCombos, selected, auditDirection, AUDITDATE)
+    selected := selectAudit(sellCombos, selected, auditDirection, AUDITDATE)
+    if SHOWAUDIT and barstate.islast
+        string title = AUDITSIDE + " Combo" + (barstate.isconfirmed ? "" : " | live bar")
+        string starts = na(selected) ? "No matching completed setup\nin retained history" : dateText(selected.startTime) + " -> " + dateText(selected.setupTime)
+        string state = na(selected) ? "-" : selected.state + " | C" + str.tostring(selected.count)
+        string price = na(selected) ? "-" : str.tostring(selected.lastClose, format.mintick)
+        string trail = na(selected) ? "Choose a setup 9 date, or leave blank\nfor the latest completed setup." : selected.trail
+        string active = activeSummary(buyCombos) + "\n" + activeSummary(sellCombos)
+        table.cell(audit, 0, 0, "Combo audit", text_color=color.black, text_size=size.small)
+        table.cell(audit, 1, 0, title, text_color=color.black, text_size=size.small)
+        table.cell(audit, 0, 1, "Setup 1 -> 9", text_color=color.black, text_size=size.small)
+        table.cell(audit, 1, 1, starts, text_color=color.black, text_size=size.small)
+        table.cell(audit, 0, 2, "Status", text_color=color.black, text_size=size.small)
+        table.cell(audit, 1, 2, state, text_color=color.black, text_size=size.small)
+        table.cell(audit, 0, 3, "Last Combo close", text_color=color.black, text_size=size.small)
+        table.cell(audit, 1, 3, price, text_color=color.black, text_size=size.small)
+        table.cell(audit, 0, 4, "Count / date / close", text_color=color.black, text_size=size.small)
+        table.cell(audit, 1, 4, trail, text_color=color.black, text_size=size.small, text_halign=text.align_left)
+        table.cell(audit, 0, 5, "Active sequences", text_color=color.black, text_size=size.small)
+        table.cell(audit, 1, 5, active, text_color=color.black, text_size=size.small, text_halign=text.align_left)
+    else if barstate.islast
+        table.clear(audit, 0, 0, 1, 5)
+    if LOGAUDIT and not na(selected)
+        log.info(sequenceText(selected))
+
+// Per-bar event totals are available in the Data Window, including simultaneous
+// completions. Events are not suppressed merely because the prior bar had C13.
+plot(buyCombo10Events, "Buy Combo C10 events", display=display.data_window)
+plot(buyCombo13Events, "Buy Combo C13 events", display=display.data_window)
+plot(sellCombo10Events, "Sell Combo C10 events", display=display.data_window)
+plot(sellCombo13Events, "Sell Combo C13 events", display=display.data_window)
+
+//Plot support/resistance trend lines
+plotchar(buyPlot>high?buyPlot:close, char='-', title='Resistance Line', size=size.tiny, location=location.absolute, color=buyPlot>high?color.new(color.red,0):color.new(color.red,100))
+plotchar(sellPlot<low?sellPlot:close, char='-', title='Support Line', size=size.tiny, location=location.absolute, color=sellPlot<low?color.new(color.green,0):color.new(color.green,100))
+
+//Plot Buy/Sell indicators
+plotchar(buySignal,char='B',color=color.green,location=location.belowbar)
+plotchar(sellSignal,char='S',color=color.red,location=location.belowbar)
+//Plot buy setup
+plotchar(buySetup==1, title='Buy Setup 1', char='1', color=color.red)
+plotchar(buySetup==2, title='Buy Setup 2', char='2', color=color.red)
+plotchar(buySetup==3, title='Buy Setup 3', char='3', color=color.red)
+plotchar(buySetup==4, title='Buy Setup 4', char='4', color=color.red)
+plotchar(buySetup==5, title='Buy Setup 5', char='5', color=color.red)
+plotchar(buySetup==6, title='Buy Setup 6', char='6', color=color.red)
+plotchar(buySetup==7, title='Buy Setup 7', char='7', color=color.red)
+plotchar(buySetup==8, title='Buy Setup 8', char='8', color=color.red)
+plotshape(buySetup==9,  title='Buy Setup 9', text='9', textcolor=color.red, style=shape.arrowup, color=color.green)
+
+//Plot sell setup
+plotchar(sellSetup==1, title='Sell Setup 1', char='1', color=color.green)
+plotchar(sellSetup==2, title='Sell Setup 2', char='2', color=color.green)
+plotchar(sellSetup==3, title='Sell Setup 3', char='3', color=color.green)
+plotchar(sellSetup==4, title='Sell Setup 4', char='4', color=color.green)
+plotchar(sellSetup==5, title='Sell Setup 5', char='5', color=color.green)
+plotchar(sellSetup==6, title='Sell Setup 6', char='6', color=color.green)
+plotchar(sellSetup==7, title='Sell Setup 7', char='7', color=color.green)
+plotchar(sellSetup==8, title='Sell Setup 8', char='8', color=color.green)
+plotshape(sellSetup==9, title='Sell Setup 9', text='9', textcolor=color.green, style=shape.arrowdown, color=color.red)
+
+//Plot buy countdown
+plotchar(buyCnt==1 and buyCnt[1]!=1?true:false, title='Buy Countdown 1', char='', text='1', location=location.belowbar, color=color.red)
+plotchar(buyCnt==2 and buyCnt[1]!=2?true:false, title='Buy Countdown 2', char='', text='2', location=location.belowbar, color=color.red)
+plotchar(buyCnt==3 and buyCnt[1]!=3?true:false, title='Buy Countdown 3', char='', text='3', location=location.belowbar, color=color.red)
+plotchar(buyCnt==4 and buyCnt[1]!=4?true:false, title='Buy Countdown 4', char='', text='4', location=location.belowbar, color=color.red)
+plotchar(buyCnt==5 and buyCnt[1]!=5?true:false, title='Buy Countdown 5', char='', text='5', location=location.belowbar, color=color.red)
+plotchar(buyCnt==6 and buyCnt[1]!=6?true:false, title='Buy Countdown 6', char='', text='6', location=location.belowbar, color=color.red)
+plotchar(buyCnt==7 and buyCnt[1]!=7?true:false, title='Buy Countdown 7', char='', text='7', location=location.belowbar, color=color.red)
+plotchar(buyCnt==8 and buyCnt[1]!=8?true:false, title='Buy Countdown 8', char='', text='8', location=location.belowbar, color=color.red)
+plotchar(buyCnt==9 and buyCnt[1]!=9?true:false, title='Buy Countdown 9', char='', text='9', location=location.belowbar, color=color.red)
+plotchar(buyCnt==10 and buyCnt[1]!=10?true:false, title='Buy Countdown 10', char='', text='10', location=location.belowbar, color=color.red)
+plotchar(buyCnt==11 and buyCnt[1]!=11?true:false, title='Buy Countdown 11', char='', text='11', location=location.belowbar, color=color.red)
+plotchar(buyCnt==12 and buyCnt[1]!=12?true:false, title='Buy Countdown 12', char='', text='12', location=location.belowbar, color=color.red)
+plotshape(buyCnt==13 and buyCnt[1]!=13?true:false, title='Buy Countdown 13', text='\n13', textcolor=color.red, location=location.belowbar, style=shape.arrowup, color=color.green)
+//Plot aggressive buy countdown when == 13
+plotshape(buyAggCnt==13 and buyAggCnt[1]!=13?true:false, text='A13', title='Aggressive 13 Buy', textcolor=color.black, location=location.belowbar, style=shape.arrowup, color=color.green)
+
+//Plot sell countdown
+plotchar(sellCnt==1 and sellCnt[1]!=1?true:false, title='Sell Countdown 1', char='', text='1', location=location.belowbar, color=color.green)
+plotchar(sellCnt==2 and sellCnt[1]!=2?true:false, title='Sell Countdown 2', char='', text='2', location=location.belowbar, color=color.green)
+plotchar(sellCnt==3 and sellCnt[1]!=3?true:false, title='Sell Countdown 3', char='', text='3', location=location.belowbar, color=color.green)
+plotchar(sellCnt==4 and sellCnt[1]!=4?true:false, title='Sell Countdown 4', char='', text='4', location=location.belowbar, color=color.green)
+plotchar(sellCnt==5 and sellCnt[1]!=5?true:false, title='Sell Countdown 5', char='', text='5', location=location.belowbar, color=color.green)
+plotchar(sellCnt==6 and sellCnt[1]!=6?true:false, title='Sell Countdown 6', char='', text='6', location=location.belowbar, color=color.green)
+plotchar(sellCnt==7 and sellCnt[1]!=7?true:false, title='Sell Countdown 7', char='', text='7', location=location.belowbar, color=color.green)
+plotchar(sellCnt==8 and sellCnt[1]!=8?true:false, title='Sell Countdown 8', char='', text='8', location=location.belowbar, color=color.green)
+plotchar(sellCnt==9 and sellCnt[1]!=9?true:false, title='Sell Countdown 9', char='', text='9', location=location.belowbar, color=color.green)
+plotchar(sellCnt==10 and sellCnt[1]!=10?true:false, title='Sell Countdown 10', char='', text='10', location=location.belowbar, color=color.green)
+plotchar(sellCnt==11 and sellCnt[1]!=11?true:false, title='Sell Countdown 11', char='', text='11', location=location.belowbar, color=color.green)
+plotchar(sellCnt==12 and sellCnt[1]!=12?true:false, title='Sell Countdown 12', char='', text='12', location=location.belowbar, color=color.green)
+plotshape(sellCnt==13 and sellCnt[1]!=13?true:false, title='Sell Countdown 13', text='\n13', textcolor=color.green, location=location.belowbar, style=shape.arrowdown, color=color.red)
+//Plot aggressive sell countdown when == 13
+plotshape(sellAggCnt==13 and sellAggCnt[1]!=13?true:false, text='A13', title='Aggressive 13 Sell', textcolor=color.black, location=location.belowbar, style=shape.arrowdown, color=color.red)
