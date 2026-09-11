@@ -356,7 +356,7 @@ plotchar(buyCnt==11 and buyCnt[1]!=11?true:false, title='Buy Countdown 11', char
 plotchar(buyCnt==12 and buyCnt[1]!=12?true:false, title='Buy Countdown 12', char='', text='12', location=location.belowbar, color=color.red)
 plotshape(buyCnt==13 and buyCnt[1]!=13?true:false, title='Buy Countdown 13', text='\n13', textcolor=color.red, location=location.belowbar, style=shape.arrowup, color=color.green)
 //Plot aggressive buy countdown when == 13
-plotshape(buyAggCnt==13 and buyAggCnt[1]!=13?true:false, text='A13', title='Aggressive 13 Buy', textcolor=color.black, location=location.belowbar, style=shape.arrowup, color=color.green)
+plotshape(buyAggCnt==13 and buyAggCnt[1]!=13?true:false, text='A13', title='Aggressive 13 Buy', textcolor=color.black, location=location.belowbar, style=shape.arrowup, color=na)
 
 //Plot sell countdown
 plotchar(sellCnt==1 and sellCnt[1]!=1?true:false, title='Sell Countdown 1', char='', text='1', location=location.belowbar, color=color.green)
@@ -373,4 +373,4 @@ plotchar(sellCnt==11 and sellCnt[1]!=11?true:false, title='Sell Countdown 11', c
 plotchar(sellCnt==12 and sellCnt[1]!=12?true:false, title='Sell Countdown 12', char='', text='12', location=location.belowbar, color=color.green)
 plotshape(sellCnt==13 and sellCnt[1]!=13?true:false, title='Sell Countdown 13', text='\n13', textcolor=color.green, location=location.belowbar, style=shape.arrowdown, color=color.red)
 //Plot aggressive sell countdown when == 13
-plotshape(sellAggCnt==13 and sellAggCnt[1]!=13?true:false, text='A13', title='Aggressive 13 Sell', textcolor=color.black, location=location.belowbar, style=shape.arrowdown, color=color.red)
+plotshape(sellAggCnt==13 and sellAggCnt[1]!=13?true:false, text='A13', title='Aggressive 13 Sell', textcolor=color.black, location=location.belowbar, style=shape.arrowdown, color=na)

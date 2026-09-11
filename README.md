@@ -12,7 +12,7 @@ Each buy or sell setup gets a provisional Combo from setup bar 1. If the setup f
 
 C1–C10 retain TD_2's four strict conditions. C11–C13 only require improvement over that sequence's last qualifying close. A candle can qualify for more than one active sequence, but can advance each sequence only once.
 
-The 24 non-Combo equations are preserved, apart from the declarations, reassignment syntax, and colour namespaces required by Pine v6. The two B/S display calls are commented out, so capital B and S are hidden while their internal calculations remain. The other 48 non-Combo plot calls are preserved, including setups, Sequential/aggressive countdowns, and levels.
+The 24 non-Combo equations are preserved, apart from the declarations, reassignment syntax, and colour namespaces required by Pine v6. The two B/S display calls are commented out, so capital B and S are hidden while their internal calculations remain. The other 48 non-Combo plot calls remain active, including setups, Sequential/aggressive countdowns, and levels. Only the two A13 arrow colours are hidden; their black text and calculations are preserved.
 
 ### Install in TradingView
 
@@ -25,6 +25,7 @@ The full indicator title is **LZH_3- DeMark Time Indicator Independent Combo**.
 
 ### Chart markers
 
+- **A13:** text only for both buy and sell. The arrow colour is `na`; the black caption, font size, position, and conditions are preserved.
 - **C10:** text only, with no arrow, for both buy and sell Combos.
 - **C13:** a green upward arrow for buy Combos and a native red `plotshape(..., style=shape.arrowdown)` for sell Combos, using the same default size as Sell Setup 9 and Sell Countdown 13. C13 captions remain separate labels at the same font size as C10.
 - Each sequence gets a separate C10/C13 label, including same-bar and consecutive-bar completions. Marker tooltips show the originating setup and qualifying-candle trail.
@@ -56,9 +57,11 @@ A blank audit date selects the latest completed setup of the chosen direction. T
 
 Live values are provisional. Ordinary Pine `var` state rolls back on each tick, so repeated updates cannot accumulate multiple counts on one candle. A live C13 can disappear if the latest price stops qualifying; the closing tick determines the historical result.
 
-### Validation recorded on 10 September 2026
+### Validation
 
-The production script compiled and ran in TradingView. A local Pine regression harness using the exact production Combo engine passed **46 assertions**, covering both directions, qualification conditions, independent references, overlap boundaries, simultaneous/consecutive completions, expiry, cancellation, and snapshot isolation. The test harness and detailed evidence remain in the development workspace and are not included in this repository.
+On 11 September 2026, the A13 text-only update compiled and was saved in TradingView as TD_3 version 12. Editor readback matched the local source. The sell A13 captions on 11 August and 11 September 2026 were checked without their red arrows. The buy A13 on 24 April 2025 was checked without its green arrow; the Data Window still reported Aggressive 13 Buy = 1. Setup 9, regular Countdown 13, and C13 arrows remain visible. Local checks confirmed that the only Pine changes were the two A13 arrow colours and that all calculations remain unchanged.
+
+On 10 September 2026, the production script compiled and ran in TradingView. A local Pine regression harness using the exact production Combo engine passed **46 assertions**, covering both directions, qualification conditions, independent references, overlap boundaries, simultaneous/consecutive completions, expiry, cancellation, and snapshot isolation. The test harness and detailed evidence remain in the development workspace and are not included in this repository.
 
 Before hiding B/S, local source checks confirmed preservation of the 24 non-Combo equations and 50 non-Combo plot calls. This was a source comparison, not an exhaustive historical comparison of every non-Combo output. The later C10 text-only display update also compiled and was visually checked in TradingView. The source copied back from Pine Editor matched the local file after normalising line endings.
 
