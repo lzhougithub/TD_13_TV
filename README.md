@@ -12,7 +12,7 @@ Each buy or sell setup gets a provisional Combo from setup bar 1. If the setup f
 
 C1–C10 retain TD_2's four strict conditions. C11–C13 only require improvement over that sequence's last qualifying close. A candle can qualify for more than one active sequence, but can advance each sequence only once.
 
-The 24 non-Combo equations and 50 non-Combo plot calls are preserved, apart from the declarations, reassignment syntax, and colour namespaces required by Pine v6. Those include setups, Sequential/aggressive countdowns, B/S signals, and levels.
+The 24 non-Combo equations are preserved, apart from the declarations, reassignment syntax, and colour namespaces required by Pine v6. The two B/S display calls are commented out, so capital B and S are hidden while their internal calculations remain. The other 48 non-Combo plot calls are preserved, including setups, Sequential/aggressive countdowns, and levels.
 
 ### Install in TradingView
 
@@ -26,9 +26,10 @@ The full indicator title is **LZH_3- DeMark Time Indicator Independent Combo**.
 ### Chart markers
 
 - **C10:** text only, with no arrow, for both buy and sell Combos.
-- **C13:** a green upward arrow for buy Combos and a compact red downward arrow for sell Combos. C13 captions use the same font size as C10; the compact sell arrow is drawn separately from its caption.
+- **C13:** a green upward arrow for buy Combos and a native red `plotshape(..., style=shape.arrowdown)` for sell Combos, using the same default size as Sell Setup 9 and Sell Countdown 13. C13 captions remain separate labels at the same font size as C10.
 - Each sequence gets a separate C10/C13 label, including same-bar and consecutive-bar completions. Marker tooltips show the originating setup and qualifying-candle trail.
-- Up to 450 drawing labels are retained. Each compact sell C13 uses two labels, and its arrow and caption are retired together. Four Data Window fields report per-bar buy/sell C10/C13 event totals over the loaded history.
+- Simultaneous sell C13s share one native arrow on the candle while retaining their separate captions, tooltips, and counts. The arrow uses the first sell C13 caption's price position and resets on each bar.
+- Up to 450 drawing labels are retained. Native sell C13 arrows and the four Data Window fields for per-bar buy/sell C10/C13 event totals remain available over the loaded history, beyond that label limit.
 
 ### Overlap and cancellation policy
 
@@ -59,7 +60,11 @@ Live values are provisional. Ordinary Pine `var` state rolls back on each tick, 
 
 The production script compiled and ran in TradingView. A local Pine regression harness using the exact production Combo engine passed **46 assertions**, covering both directions, qualification conditions, independent references, overlap boundaries, simultaneous/consecutive completions, expiry, cancellation, and snapshot isolation. The test harness and detailed evidence remain in the development workspace and are not included in this repository.
 
-Local source checks confirmed preservation of the 24 non-Combo equations and 50 non-Combo plot calls. This was a source comparison, not an exhaustive historical comparison of every non-Combo output. The later C10 text-only display update also compiled and was visually checked in TradingView. The source copied back from Pine Editor matched the local file after normalising line endings.
+Before hiding B/S, local source checks confirmed preservation of the 24 non-Combo equations and 50 non-Combo plot calls. This was a source comparison, not an exhaustive historical comparison of every non-Combo output. The later C10 text-only display update also compiled and was visually checked in TradingView. The source copied back from Pine Editor matched the local file after normalising line endings.
+
+The B/S display update only comments out those two plot calls; all other Pine source lines remain unchanged. TradingView saved and applied this update as TD_3 version 8 on 11 September 2026. Editor readback confirmed that only lines 320 and 321 changed. The USO daily chart was visually checked: the 24 August S is absent, while setup numbers, countdowns, C10/C13 labels, and arrows remain.
+
+On 11 September 2026, the native sell C13 arrow update compiled and was saved as TD_3 version 11. The 10 September C13 arrow was visually checked on USO daily against the 20 August Setup 9 and 12 August Countdown 13 arrows: they use the same native symbol and default size. The C13 caption font is unchanged. Editor readback verified the updated source; local checks confirmed that the Combo engine and all 24 legacy equations remain unchanged.
 
 On the USO daily chart, the sell setup starting **10 August** and completing **20 August** reached C10 on **3 September**, C11 on **8 September**, C12 on **9 September**, and **C13 on 10 September**. The last candle was still live during validation, so that day's result was provisional.
 
