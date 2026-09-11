@@ -26,9 +26,9 @@ The full indicator title is **LZH_3- DeMark Time Indicator Independent Combo**.
 ### Chart markers
 
 - **C10:** text only, with no arrow, for both buy and sell Combos.
-- **C13:** a green upward arrow for buy Combos and a compact red downward arrow for sell Combos.
+- **C13:** a green upward arrow for buy Combos and a compact red downward arrow for sell Combos. C13 captions use the same font size as C10; the compact sell arrow is drawn separately from its caption.
 - Each sequence gets a separate C10/C13 label, including same-bar and consecutive-bar completions. Marker tooltips show the originating setup and qualifying-candle trail.
-- The most recent 450 labels are retained. Four Data Window fields report per-bar buy/sell C10/C13 event totals over the loaded history.
+- Up to 450 drawing labels are retained. Each compact sell C13 uses two labels, and its arrow and caption are retired together. Four Data Window fields report per-bar buy/sell C10/C13 event totals over the loaded history.
 
 ### Overlap and cancellation policy
 

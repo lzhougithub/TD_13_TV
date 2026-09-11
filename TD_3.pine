@@ -199,24 +199,37 @@ updateCombos(array<ComboSequence> sequences, array<ComboSequence> records, int d
 float markerAtr = ta.atr(14)
 float markerGap = math.max(nz(markerAtr, high - low) * 0.3, syminfo.mintick * 8)
 
-drawCombo(ComboSequence seq, int stack, array<label> markers) =>
+drawCombo(ComboSequence seq, int stack, array<label> markers, array<int> markerGroupSizes) =>
     string caption = "C" + str.tostring(seq.count)
     if SHOWORIGIN
         caption += "\n" + dateText(seq.setupTime)
     // Separate labels preserve multiple same-bar events and their own tooltips.
     float markerY = low - markerGap * (stack + 2)
-    string markerStyle = seq.count == 10 ? label.style_none : seq.direction == 1 ? label.style_arrowdown : label.style_arrowup
-    string markerSize = seq.count == 13 and seq.direction == 1 ? size.tiny : size.small
-    label mark = label.new(bar_index, markerY, caption, xloc=xloc.bar_index, yloc=yloc.price, style=markerStyle, color=seq.direction == 1 ? color.red : color.green, textcolor=color.black, size=markerSize, tooltip=sequenceText(seq))
-    markers.push(mark)
-    if markers.size() > 450
-        label.delete(markers.shift())
+    bool compactSell13 = seq.count == 13 and seq.direction == 1
+    if compactSell13
+        // Size the arrow independently from its caption. The transparent caption
+        // has a blank bottom line to keep C13 clear of the short arrow below it.
+        label arrow = label.new(bar_index, markerY, "", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_arrowdown, color=color.red, size=size.tiny, tooltip=sequenceText(seq))
+        label textMark = label.new(bar_index, markerY, caption + "\n", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_down, color=color.new(color.red, 100), textcolor=color.black, size=size.small, tooltip=sequenceText(seq))
+        markers.push(arrow)
+        markers.push(textMark)
+    else
+        string markerStyle = seq.count == 10 ? label.style_none : label.style_arrowup
+        label mark = label.new(bar_index, markerY, caption, xloc=xloc.bar_index, yloc=yloc.price, style=markerStyle, color=seq.direction == 1 ? color.red : color.green, textcolor=color.black, size=size.small, tooltip=sequenceText(seq))
+        markers.push(mark)
+    markerGroupSizes.push(compactSell13 ? 2 : 1)
+    // Retire complete markers, keeping each sell C13 arrow and caption together.
+    while markers.size() > 450
+        int oldestGroupSize = markerGroupSizes.shift()
+        for j = 1 to oldestGroupSize
+            label.delete(markers.shift())
     true
 
 var array<ComboSequence> buyCombos = array.new<ComboSequence>()
 var array<ComboSequence> sellCombos = array.new<ComboSequence>()
 var array<ComboSequence> retiredCombos = array.new<ComboSequence>()
 var array<label> comboMarkers = array.new<label>()
+var array<int> comboMarkerGroupSizes = array.new<int>()
 var int lastBuySetup9 = na
 var int lastSellSetup9 = na
 
@@ -229,12 +242,12 @@ int sellCombo10Events = 0
 int sellCombo13Events = 0
 int markerStack = 0
 for seq in buyMilestones
-    drawCombo(seq, markerStack, comboMarkers)
+    drawCombo(seq, markerStack, comboMarkers, comboMarkerGroupSizes)
     markerStack += 1
     buyCombo10Events += seq.count == 10 ? 1 : 0
     buyCombo13Events += seq.count == 13 ? 1 : 0
 for seq in sellMilestones
-    drawCombo(seq, markerStack, comboMarkers)
+    drawCombo(seq, markerStack, comboMarkers, comboMarkerGroupSizes)
     markerStack += 1
     sellCombo10Events += seq.count == 10 ? 1 : 0
     sellCombo13Events += seq.count == 13 ? 1 : 0
