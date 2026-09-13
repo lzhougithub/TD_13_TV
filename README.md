@@ -27,10 +27,10 @@ The full indicator title is **LZH_3- DeMark Time Indicator Independent Combo**.
 
 - **A13:** text only for both buy and sell. The arrow colour is `na`; the black caption, font size, position, and conditions are preserved.
 - **C10:** text only, with no arrow, for both buy and sell Combos.
-- **C13:** a green upward arrow for buy Combos and a native red `plotshape(..., style=shape.arrowdown)` for sell Combos, using the same default size as Sell Setup 9 and Sell Countdown 13. C13 captions remain separate labels at the same font size as C10.
+- **C13:** native `plotshape` arrows, green `shape.arrowup` for buy Combos and red `shape.arrowdown` for sell Combos. Each uses the same default size as the corresponding Countdown 13 arrow. C13 captions retain their existing positions and font size, which matches C10.
 - Each sequence gets a separate C10/C13 label, including same-bar and consecutive-bar completions. Marker tooltips show the originating setup and qualifying-candle trail.
-- Simultaneous sell C13s share one native arrow on the candle while retaining their separate captions, tooltips, and counts. The arrow uses the first sell C13 caption's price position and resets on each bar.
-- Up to 450 drawing labels are retained. Native sell C13 arrows and the four Data Window fields for per-bar buy/sell C10/C13 event totals remain available over the loaded history, beyond that label limit.
+- Simultaneous C13s in the same direction share one native arrow on the candle while retaining their separate captions, tooltips, and counts. Each direction's arrow uses its first C13 caption's price position and resets on each bar.
+- Up to 450 drawing labels are retained. Native buy/sell C13 arrows and the four Data Window fields for per-bar buy/sell C10/C13 event totals remain available over the loaded history, beyond that label limit.
 
 ### Overlap and cancellation policy
 
@@ -58,6 +58,8 @@ A blank audit date selects the latest completed setup of the chosen direction. T
 Live values are provisional. Ordinary Pine `var` state rolls back on each tick, so repeated updates cannot accumulate multiple counts on one candle. A live C13 can disappear if the latest price stops qualifying; the closing tick determines the historical result.
 
 ### Validation
+
+On 13 September 2026, the native buy C13 arrow update compiled and was saved in TradingView as TD_3 version 13. On ORCL daily, the 1 July and 20 July C13 arrows were visually compared with the 13 July Buy Countdown 13 arrow at the same chart zoom. They now use the same native upward symbol and default size. The original C13 caption positions, font sizes, and tooltips are preserved. Editor readback matched the local source. Local checks confirmed that all 24 legacy equations, the Combo engine, and existing non-Combo displays remain unchanged.
 
 On 11 September 2026, the A13 text-only update compiled and was saved in TradingView as TD_3 version 12. Editor readback matched the local source. The sell A13 captions on 11 August and 11 September 2026 were checked without their red arrows. The buy A13 on 24 April 2025 was checked without its green arrow; the Data Window still reported Aggressive 13 Buy = 1. Setup 9, regular Countdown 13, and C13 arrows remain visible. Local checks confirmed that the only Pine changes were the two A13 arrow colours and that all calculations remain unchanged.
 

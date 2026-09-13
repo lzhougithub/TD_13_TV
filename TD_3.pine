@@ -212,7 +212,9 @@ drawCombo(ComboSequence seq, int stack, array<label> markers) =>
         markers.push(textMark)
     else
         string markerStyle = seq.count == 10 ? label.style_none : label.style_arrowup
-        label mark = label.new(bar_index, markerY, caption, xloc=xloc.bar_index, yloc=yloc.price, style=markerStyle, color=seq.direction == 1 ? color.red : color.green, textcolor=color.black, size=size.small, tooltip=sequenceText(seq))
+        // Preserve the buy C13 caption's placement; its native arrow is plotted below.
+        color markerColor = seq.count == 13 ? na : seq.direction == 1 ? color.red : color.green
+        label mark = label.new(bar_index, markerY, caption, xloc=xloc.bar_index, yloc=yloc.price, style=markerStyle, color=markerColor, textcolor=color.black, size=size.small, tooltip=sequenceText(seq))
         markers.push(mark)
     // Each sequence milestone now contributes one label.
     while markers.size() > 450
@@ -233,9 +235,13 @@ int buyCombo10Events = 0
 int buyCombo13Events = 0
 int sellCombo10Events = 0
 int sellCombo13Events = 0
+float buyCombo13ArrowY = na
 float sellCombo13ArrowY = na
 int markerStack = 0
 for seq in buyMilestones
+    // One native arrow per candle; all simultaneous C13 captions/counts survive.
+    if seq.count == 13 and na(buyCombo13ArrowY)
+        buyCombo13ArrowY := low - markerGap * (markerStack + 2)
     drawCombo(seq, markerStack, comboMarkers)
     markerStack += 1
     buyCombo10Events += seq.count == 10 ? 1 : 0
@@ -309,7 +315,8 @@ plot(buyCombo13Events, "Buy Combo C13 events", display=display.data_window)
 plot(sellCombo10Events, "Sell Combo C10 events", display=display.data_window)
 plot(sellCombo13Events, "Sell Combo C13 events", display=display.data_window)
 
-// Match the native symbol and default size used by Sell Setup 9 / Countdown 13.
+// Match the native symbols and default sizes used by Setup 9 / Countdown 13.
+plotshape(buyCombo13ArrowY, title="Buy Combo C13 arrow", style=shape.arrowup, location=location.absolute, color=color.green, display=display.pane)
 plotshape(sellCombo13ArrowY, title="Sell Combo C13 arrow", style=shape.arrowdown, location=location.absolute, color=color.red, display=display.pane)
 
 //Plot support/resistance trend lines
